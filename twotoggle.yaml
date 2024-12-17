@@ -1,0 +1,51 @@
+blueprint:
+  name: State Change Counter with Conditional Actions
+  description: >
+    Counts how many times the state of a selected entity changes within a defined time period 
+    and performs actions based on the count.
+  domain: automation
+  input:
+    target_entity:
+      name: Target Entity
+      description: The entity to monitor for state changes.
+      selector:
+        entity:
+    time_period:
+      name: Time Period
+      description: Time window (in seconds) to count state changes.
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 3600
+          unit_of_measurement: seconds
+    thresholds:
+      name: Count Thresholds and Actions
+      description: Define thresholds and the actions for each count.
+      default:
+        - count: 1
+          action: []
+        - count: 3
+          action: []
+      selector:
+        object:
+variables:
+  entity_id: !input target_entity
+  time_period: !input time_period
+  thresholds: !input thresholds
+trigger:
+  - platform: state
+    entity_id: !input target_entity
+action:
+  - repeat:
+      count: "{{ thresholds | length }}"
+      sequence:
+        - variables:
+            current_threshold: "{{ thresholds[repeat.index - 1] }}"
+        - condition: template
+          value_template: >
+            {% set history = states[entity_id].state | history_stats('change', now() - timedelta(seconds=time_period), now()) %}
+            {{ history | int == current_threshold.count }}
+        - choose:
+            - conditions: "{{ true }}"
+              sequence: !input "thresholds[repeat.index - 1].action"
